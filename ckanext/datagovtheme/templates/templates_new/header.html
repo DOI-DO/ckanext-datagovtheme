@@ -87,16 +87,14 @@
             <div class="page-header_new">
                 <div class="main-heading">
                     <h1>
-                    {% if menus['topic_header'] %}
-                        {% if menus['topic_header']['multi'] %}
-                        <span class="category-header {{ menus['topic_header']['class'] }}"><a href="{{ menus['topic_header']['url'][0] }}" class="topic_url"><div><i></i></div><span class="topic_name">{{ menus['topic_header']['name'][0] }}</span></a> &nbsp; &mdash; &nbsp; <a href="{{ menus['topic_header']['url'][1] }}"><span class="topic_name">{{ menus['topic_header']['name'][1] }}</span></a> &nbsp; &mdash; &nbsp; </span>
+                    {% block header_logo %}
+                        {% if g.site_logo %}
+                            <a class="logo" href="/dataset"/> <img src="{{ g.site_logo }}" alt="{{ g.site_title }}" title="{{ g.site_title }}" id="header-logo"/></a>
                         {% else %}
-                        <span class="category-header {{ menus['topic_header']['class'] }}"><a href="{{ menus['topic_header']['url'] }}" class="topic_url"><div><i></i></div><span class="topic_name">{{ menus['topic_header']['name'] }}</span></a> &nbsp; &mdash; &nbsp; </span>
+                            <h1><a href="{{ h.nav_link(_('Datasets'), controller='package', action='search', highlight_actions = 'new index') }}">{{ g.site_title }}</a></h1>
                         {% endif %}
-                    {% else %}
-                        <span class="category-header "><a href="#" class="topic_url"><div><i></i></div><span class="topic_name"></span></a></span>
-                    {% endif %}
-                        Data Catalog
+                        {% if g.site_description %}<h2>{{ g.site_description }}</h2>{% endif %}
+                    {% endblock %}
                     </h1>
                 </div>
 
