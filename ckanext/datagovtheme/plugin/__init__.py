@@ -41,7 +41,7 @@ class DatagovTheme(MixinPlugin, p.SingletonPlugin):
         if not package_type:
             return OrderedDict([  # ('groups', 'Topics'),
                 # ('vocab_category_all', 'Topic Categories'),
-                    ('metadata_type', 'Dataset Type'),
+                ('metadata_type', 'Dataset Type'),
                 ('tags', 'Tags'),
                 ('res_format', 'Formats'),
                 # ('groups', 'Topics'),
@@ -61,13 +61,13 @@ class DatagovTheme(MixinPlugin, p.SingletonPlugin):
         key = 'vocab___category_tag_%s' % group_id
         if not package_type:
             return OrderedDict([(key, 'Categories'),
-                ('metadata_type', 'Dataset Type'),
-                # ('organization_type', 'Organization Types'),
-                ('tags', 'Tags'),
-                ('res_format', 'Formats'),
-                ('organization', 'Organizations'),
-                (key, 'Categories'),
-                # ('publisher', 'Publisher'),
+                                ('metadata_type', 'Dataset Type'),
+                                # ('organization_type', 'Organization Types'),
+                                ('tags', 'Tags'),
+                                ('res_format', 'Formats'),
+                                ('organization', 'Organizations'),
+                                (key, 'Categories'),
+                                # ('publisher', 'Publisher'),
             ])
         else:
             return facets_dict
