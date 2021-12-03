@@ -41,7 +41,7 @@ class DatagovTheme(MixinPlugin, p.SingletonPlugin):
         if not package_type:
             return OrderedDict([  # ('groups', 'Topics'),
                 # ('vocab_category_all', 'Topic Categories'),
-                ('metadata_type', 'Dataset Type'),
+                    ('metadata_type', 'Dataset Type'),
                 ('tags', 'Tags'),
                 ('res_format', 'Formats'),
                 # ('groups', 'Topics'),
