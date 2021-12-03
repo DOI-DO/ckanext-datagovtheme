@@ -25,32 +25,32 @@ class DatagovTheme(MixinPlugin, p.SingletonPlugin):
             return facets_dict
 
         return OrderedDict([  # ('groups', 'Topics'),
-                            # ('vocab_category_all', 'Topic Categories'),
-                            ('metadata_type', 'Dataset Type'),
-                            ('tags', 'Tags'),
-                            ('res_format', 'Formats'),
-                            # ('organization_type', 'Organization Types'),
-                            ('organization', 'Organizations'),
-                            ('publisher', 'Publishers'),
-                            ('bureauCode', 'Bureaus'),
-                            # ('extras_progress', 'Progress'),
-                    ])
+                        # ('vocab_category_all', 'Topic Categories'),
+                        ('metadata_type', 'Dataset Type'),
+                        ('tags', 'Tags'),
+                        ('res_format', 'Formats'),
+                        # ('organization_type', 'Organization Types'),
+                        ('organization', 'Organizations'),
+                        ('publisher', 'Publishers'),
+                        ('bureauCode', 'Bureaus'),
+                        # ('extras_progress', 'Progress'),
+        ])
 
     def organization_facets(self, facets_dict, organization_type, package_type):
 
         if not package_type:
             return OrderedDict([  # ('groups', 'Topics'),
-                                # ('vocab_category_all', 'Topic Categories'),
-                                ('metadata_type', 'Dataset Type'),
-                                ('tags', 'Tags'),
-                                ('res_format', 'Formats'),
-                                # ('groups', 'Topics'),
-                                ('harvest_source_title', 'Harvest Source'),
-                                ('capacity', 'Visibility'),
-                                ('dataset_type', 'Resource Type'),
-                                ('publisher', 'Publishers'),
-                                ('bureauCode', 'Bureaus'),
-                        ])
+                            # ('vocab_category_all', 'Topic Categories'),
+                            ('metadata_type', 'Dataset Type'),
+                            ('tags', 'Tags'),
+                            ('res_format', 'Formats'),
+                            # ('groups', 'Topics'),
+                            ('harvest_source_title', 'Harvest Source'),
+                            ('capacity', 'Visibility'),
+                            ('dataset_type', 'Resource Type'),
+                            ('publisher', 'Publishers'),
+                            ('bureauCode', 'Bureaus'),
+            ])
         else:
             return facets_dict
 
@@ -61,14 +61,14 @@ class DatagovTheme(MixinPlugin, p.SingletonPlugin):
         key = 'vocab___category_tag_%s' % group_id
         if not package_type:
             return OrderedDict([(key, 'Categories'),
-                                ('metadata_type', 'Dataset Type'),
-                                # ('organization_type', 'Organization Types'),
-                                ('tags', 'Tags'),
-                                ('res_format', 'Formats'),
-                                ('organization', 'Organizations'),
-                                (key, 'Categories'),
-                                # ('publisher', 'Publisher'),
-                            ])
+                            ('metadata_type', 'Dataset Type'),
+                            # ('organization_type', 'Organization Types'),
+                            ('tags', 'Tags'),
+                            ('res_format', 'Formats'),
+                            ('organization', 'Organizations'),
+                            (key, 'Categories'),
+                            # ('publisher', 'Publisher'),
+            ])
         else:
             return facets_dict
 
