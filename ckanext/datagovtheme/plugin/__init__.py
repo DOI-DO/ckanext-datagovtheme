@@ -68,7 +68,7 @@ class DatagovTheme(MixinPlugin, p.SingletonPlugin):
                                 ('organization', 'Organizations'),
                                 (key, 'Categories'),
                                 # ('publisher', 'Publisher'),
-            ])
+                            ])
         else:
             return facets_dict
 
