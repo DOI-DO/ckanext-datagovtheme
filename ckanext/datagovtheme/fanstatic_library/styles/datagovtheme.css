@@ -535,6 +535,12 @@ a {
 .select2-helper i {
     line-height: 32px;
 }
+.resources.module-content{
+    padding:15px;
+}
+.module-content .image {
+    max-width: 375px;
+}
 .module-content.collection-package {
     padding-bottom: 0;
 }
@@ -955,7 +961,7 @@ input.search-new{
 #exitURL{position:absolute;right:15px;width:150px;color:#000;top:35px;z-index:999;}
 header .header_new.banner_new.page-heading_new  {
     background-color: #d6b994;
-    color: #FFFFFF;
+    color: #ffffff;
     padding:7px 0 5px 0;
 }
 .header_new.banner_new.page-heading_new {
@@ -1144,6 +1150,11 @@ body .searchbox-row.skip-navigation {
     border-bottom-left-radius: 0;
     border-top-left-radius: 0;
 }
+#menu-footer-parent {
+    margin: auto;
+    float: none;
+    width: 100%;
+}
 .header_new .container {
     background-color: #d6b994;
 }
@@ -1168,6 +1179,12 @@ footer.site-footer {
 }
 .col-md-offset-1 {
 }
+
+#header-logo {
+    max-width: 90px;
+    max-height: 90px;
+}
+
 .col-md-3 {
     width: 25%;
 }
@@ -1181,7 +1198,7 @@ footer.site-footer {
     text-indent:-9999em;
 }
 .svg .navbar-brand, .svg .logo-brand {
-    background: url("http://data.gov/wp-content/themes/roots-nextdatagov/assets/img/logo.svg") no-repeat scroll 0 0 / contain  rgba(0, 0, 0, 0);
+    background: url("http://data.gov/wp-content/themes/roots-nextdatagov/assets/img/logo.png") no-repeat scroll 0 0 / contain  rgba(0, 0, 0, 0);
 }
 a.logo-brand {
     background: url("../images/doi_logo.png") no-repeat scroll left center;
@@ -1209,7 +1226,8 @@ a.logo-brand {
     font-size:16px;
 }
 .container, .navbar-static-top .container, .navbar-fixed-top .container, .navbar-fixed-bottom .container {
-    width: 970px;
+    width: 100%;
+    max-width: 970px;
 }
 .row .nav .dropdown-toggle .caret {
     margin-top: 0px;
@@ -1506,6 +1524,7 @@ aside.secondary{
     align-items: center;
     border: 0 none;
     padding-top: 13px;
+    min-width: 350px;
 }
 .control-group.search-giant {
     float: left;
@@ -1768,10 +1787,6 @@ form.search-form{padding-right:0px;border-bottom: 0px;padding-bottom:0px;}
     padding-top: 20px;
 }
 
-.controller-organization.action-read .primary,.controller-package.action-read .primary {
-    width: 703px;
-}
-
 .search-form.no-bottom-border {
     display: flex;
     flex-wrap: wrap;
@@ -1909,7 +1924,6 @@ p.module-content{padding-left: 18px !important;}
     font-size: 16px;
     margin: 10px auto 0;
     padding: 15px;
-    width: 660px;
     color:#444;
 }
 .non-federal .fa-info-sign
@@ -1938,7 +1952,7 @@ article.module.prose li .dataset-content h3 {
   margin-top: 0;
 }
 article.module.prose h3 {
-margin-top : 2.5em;
+    margin-top : 0px;
 }
 
 .primary .module-ratings {
@@ -2100,6 +2114,7 @@ margin-top: 0px;
 }
 .btn.btn-navbar{
     margin-top:15px;
+    float: right;
 }
 .module-heading .action {
     float: right;
@@ -2133,17 +2148,14 @@ margin-top: 0px;
         float:none !important ;
     }
 }
-/* queries specific for smaller devices*/
-@media (min-width: 769px) and (max-width: 980px)  {
-    header.masthead .container {
-        width: 946px;
-    }
-    aside.secondary{
-        width:236px;
-    }
-}
 
 @media screen and (max-width: 768px) {
+    #content {
+        padding: 0px;
+    }
+    .navbar-nav{
+        margin: auto;
+    }
     .container, .navbar-static-top .container, .navbar-fixed-top .container, .navbar-fixed-bottom .container {
     width:100%;
     }
@@ -2167,7 +2179,7 @@ margin-top: 0px;
         display: inline-block;
     }
     .masthead .container {
-    padding:0px;
+        padding-bottom: 15px;
     }
     [role="main"] .primary {
         width:100%;
@@ -2209,7 +2221,7 @@ margin-top: 0px;
         float: none;
     }
     .control-order-by {
-        bottom: 0;
+        margin-bottom: 15px;
         float: left;
         position: relative;
     }
@@ -2221,7 +2233,7 @@ margin-top: 0px;
     .search-giant button {
         position: absolute;
         right: 4%;
-        top: 18%;
+        top: 15%;
 
     }
     .page-header_new .toolbar{
@@ -2237,6 +2249,12 @@ margin-top: 0px;
     }
     #dataset-search .control-order-by {
         margin-left: 0px;
+        margin-top: 0px
+    }
+    #dataset-search .control-order-by label{
+        padding-top: 15px;
+        padding-bottom: 15px;
+        margin-bottom: 0px;
     }
     .search-form .control-order-by {
         margin-left: 0px;
@@ -2244,6 +2262,7 @@ margin-top: 0px;
     .toolbar{
         border-right:0px;
         border-left:0px;
+        padding: 15px;
     }
     .page_primary_action {
         margin-top:0px;

@@ -1,86 +1,79 @@
+from builtins import object
+
 from bs4 import BeautifulSoup
-import logging
-import json
-from nose.tools import assert_equal, assert_in
-import urllib2
-from ckan import plugins as p
-try:
-    from ckan.tests.helpers import reset_db, FunctionalTestBase
-    from ckan.tests import factories
-except ImportError:
-    from ckan.new_tests.helpers import reset_db, FunctionalTestBase
-    from ckan.new_tests import factories
-
-if p.toolkit.check_ckan_version(max_version='2.3'):
-    from pylons import config
-else:
-    from ckan.plugins.toolkit import config
-
-log = logging.getLogger(__name__)
+from ckantoolkit.tests import factories
+import pytest
 
 
-class TestUIData(FunctionalTestBase):
+# The /dataset page uses get_pkg_dict_extra which depends on HarvestObject,
+# hence the harvest extension. Include it for these tests.
+@pytest.mark.ckan_config('ckan.plugins', 'harvest datagovtheme')
+@pytest.mark.use_fixtures('with_plugins', 'clean_db', 'clean_index')
+class TestSearchFilters():
 
-    @classmethod
-    def setup(cls):
-        super(TestUIData, cls).setup_class()
-        reset_db()
-        
-    def create_datasets(self):
+    @pytest.fixture(autouse=True)
+    def set_up(self):
         organization = factories.Organization()
         self.group1 = factories.Group()
         self.group2 = factories.Group()
         self.dataset1 = factories.Dataset(owner_org=organization['id'], groups=[{"name": self.group1["name"]}])
         self.dataset2 = factories.Dataset(owner_org=organization['id'], groups=[{"name": self.group2["name"]}])
-        sysadmin = factories.Sysadmin(name='testUpdate')
-        self.user_name = sysadmin['name'].encode('ascii')
-       
-    def test_not_empty_sections(self):
-        
-        self.create_datasets()
-        
-        app = self._get_test_app()
+
+    def test_not_empty_sections(self, app):
         index_response = app.get('/dataset')
-        
-        html = BeautifulSoup(index_response.unicode_body, 'html.parser')
+
+        html = BeautifulSoup(index_response.body, 'html.parser')
 
         # get the main section where filters are included
-        filters = html.find('div', attrs={'class': 'filters'})
-        log.info('FILTERS: {}'.format(filters))
+        filters = html.select_one('div.filters')
+        assert filters, "Could not find div.filters"
 
-        # we expect "groups", "tags" and "organization"
-        
-        uls = filters.find_all('ul', attrs={"name": "facet"})
-        assert len(uls) > 0
-        for ul in uls:
-            lis = ul.find_all('li', attrs={"class": "nav-item"})
-            log.info('UL found {}. Elements: {}'.format(ul['id'], len(lis)))
-            assert len(lis) > 0
-            for li in lis:
-                log.info('Elements found: {}'.format(li))
-    
-    def test_links(self):
-        
-        app = self._get_test_app()
+        # Get the section "names"
+        filter_names = [' '.join(filter_header.stripped_strings)
+                        for filter_header in filters.select('section.module .module-heading')]
+        assert len(filter_names) > 0, "Could not find section.module .module-heading"
+
+        assert 'Organizations' in filter_names
+        assert 'Tags' in filter_names
+        assert 'Bureaus' in filter_names
+        assert 'Publishers' in filter_names
+
+
+class TestApiLinks(object):
+    def test_api_doc_link(self, app):
+        """Assert CKAN major/minor version matches API docs URL."""
+        # TODO mock helpers.api_doc_url and then assert the mock was called
+        # after the request. Is this possible in CKAN?
+        from ckan.lib.helpers import ckan_version
+        expected_version = '.'.join(ckan_version().split('.')[0:2])
+
         index_response = app.get('/dataset')
-        
-        html = BeautifulSoup(index_response.unicode_body, 'html.parser')
+        html = BeautifulSoup(index_response.body, 'html.parser')
 
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.3'}
-        # Test link to api docs in CKAN 2.8
-        element = html.find('a', string='API Docs')
-        log.info('Test URL: {}'.format(element['href']))
-        assert_in('2.8', element['href'])
-        req = urllib2.Request(element['href'], headers=headers)
-        result = urllib2.urlopen(req)
-        assert_equal(200, result.getcode())
-        
-        # Test API URL
-        element = html.find('a', string='API')
-        if element['href'].startswith('/'):
-            element['href'] = config['ckan.site_url'] + element['href']
-        log.info('Test URL: {}'.format(element['href']))
-        req = urllib2.Request(element['href'], headers=headers)
-        result = urllib2.urlopen(req)
-        assert_equal(200, result.getcode())
-        
+        # Test link to api docs matches CKAN version
+        api_doc_href = html.find('a', string='API Docs')['href']
+        assert expected_version in api_doc_href
+
+    def test_api_url(self, app):
+        """Assert API link on dataset page."""
+        index_response = app.get('/dataset')
+
+        html = BeautifulSoup(index_response.body, 'html.parser')
+        api_href = html.find('a', string='API')['href']
+        assert '/api/3' == api_href
+
+
+# This test probably can't run because the javascript doesn't load
+# in the same way as the browser runs it.  The map relies on the
+# javascript running.
+# class TestMapLoading(object):
+#     def test_map_html(self, app):
+#         index_response = app.get('/dataset')
+#         html = BeautifulSoup(index_response.body, 'html.parser')
+#
+#         map_div_elements = html.find(id='dataset-map'). \
+#             find('div', {'class': 'dataset-map'}). \
+#             find(id='dataset-map-container'). \
+#             contents
+#
+#         assert len(map_div_elements) > 0
