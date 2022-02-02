@@ -1,12 +1,13 @@
 from builtins import object
 
+import pytest
 from bs4 import BeautifulSoup
 from ckantoolkit.tests import factories
-import pytest
 
 
 # The /dataset page uses get_pkg_dict_extra which depends on HarvestObject,
 # hence the harvest extension. Include it for these tests.
+# comment to see if branch can be tested properly
 @pytest.mark.ckan_config('ckan.plugins', 'harvest datagovtheme')
 @pytest.mark.use_fixtures('with_plugins', 'clean_db', 'clean_index')
 class TestSearchFilters():
