@@ -46,13 +46,25 @@ class TestDatagovthemeServed(object):
     def test_datagovtheme_navigation(self, app):
         index_response = app.get('/dataset')
 
-        assert '<li style="display:inline;"><a style="display:inline;" href="//www.doi.gov/data">Open Data at DOI</a></li>' in index_response.body
+        aboutElement = """
+            <li style="display:inline;"><a style="display:inline;" href="//data.doi.gov/about">About</a></li>
+        """
+        openGov = """
+            <li style="display:inline;"><a style="display:inline;" href="//www.data.gov/open-gov/">Open Government</a></li>
+        """
+        dataPolicy = """
+            <li style="display:inline;"><a style="display:inline;" href="//www.data.gov/data-policy">Data Policy</a></li>
+        """
+
+        assert '<li style="display:inline;"><a style="display:inline;" href="//www.doi.gov/data">Open Data at DOI</a></li>' \
+            in index_response.body
         assert '<li style="display:inline;"><a style="display:inline;" href="//usinterior.ideascale.com">Feedback</a></li>' \
                in index_response.body
-        assert '<li style="display:inline;"><a style="display:inline;" href="//data.doi.gov/about">About</a></li>' in index_response.body
-        assert '<li style="display:inline;"><a style="display:inline;" href="//www.data.gov/open-gov/">Open Government</a></li>' in index_response.body
-        assert '<li style="display:inline;"><a style="display:inline;" href="//data.gov">data.gov</a></li>' in index_response.body
-        assert '<li style="display:inline;"><a style="display:inline;" href="//www.data.gov/data-policy">Data Policy</a></li>`' in index_response.body
+        assert aboutElement in index_response.body
+        assert openGov in index_response.body
+        assert '<li style="display:inline;"><a style="display:inline;" href="//data.gov">data.gov</a></li>' \
+            in index_response.body
+        assert dataPolicy in index_response.body
 
     """
     DOI Has no topics drop down menu. This test is not necessary.
