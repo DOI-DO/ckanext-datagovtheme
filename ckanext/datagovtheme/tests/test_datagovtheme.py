@@ -47,14 +47,14 @@ class TestDatagovthemeServed(object):
         index_response = app.get('/dataset')
 
         aboutElement = """
-            <li style="display:inline;"><a style="display:inline;" href="//data.doi.gov/about">About</a></li>
-        """
+        <li style="display:inline;"><a style="display:inline;" href="//data.doi.gov/about">About</a></li>
+        """.strip().replace('\n', '')
         openGov = """
             <li style="display:inline;"><a style="display:inline;" href="//www.data.gov/open-gov/">Open Government</a></li>
-        """
+        """.strip().replace('\n', '')
         dataPolicy = """
             <li style="display:inline;"><a style="display:inline;" href="//www.data.gov/data-policy">Data Policy</a></li>
-        """
+        """.strip().replace('\n', '')
 
         assert '<li style="display:inline;"><a style="display:inline;" href="//www.doi.gov/data">Open Data at DOI</a></li>' \
             in index_response.body
