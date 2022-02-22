@@ -15,10 +15,8 @@
                     <li style="display:inline;"><a style="display:inline;" href="//www.data.gov/faq">FAQ</a></li>
                     <li style="display:inline;"><a style="display:inline;" href="//www.data.gov/privacy-policy">Privacy Policy</a></li>
                     {% if c.userobj%}
-                    <li class="local-link"> <a href="{{ h.url_for('/user/_logout') }}" title="{{ _('Log out') }}"></a> </li>
                     <li class="local-link" style="display:inline;"><a style="display:inline;" href="{{ h.url_for('/user/_logout') }}" title="{{ _('Log out') }}">Logout</a> </li>
                     {% else %}
-                    <li><a href="{{ h.url_for(controller='user', action='login') }}" class="local-link"> {{ _('Login') }} </a> </li>
                     <li style="display:inline;"><a style="display:inline;" href="{{ h.url_for(controller='user', action='login') }}" class="local-link"> {{ _('Login') }} </a> </li>
                     {% endif  %}
                 </ul>

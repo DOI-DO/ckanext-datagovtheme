@@ -22,11 +22,9 @@
 
 {% block search_form_results %}
 <div class="results">
-  <strong>
-    {% block search_form_result_text %}
-    {% snippet 'snippets/search_result_text.html', query=c.q, count=c.page.item_count, type='dataset' %}
-    {% endblock %}
-  </strong>
+  {% block search_form_result_text %}
+  {% snippet 'snippets/search_result_text.html', query=c.q, count=c.page.item_count, type='dataset' %}
+  {% endblock %}
   {% block search_form_filter_list %}
   <div class="filter-list">
     {% for field in c.fields_grouped %}
