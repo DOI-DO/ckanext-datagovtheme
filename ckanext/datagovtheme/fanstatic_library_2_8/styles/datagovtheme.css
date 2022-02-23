@@ -193,14 +193,14 @@ a {
     display: block;
     float: left;
     height: 53px;
-    background-image: url("../images/doi_logo.png");
+    background-image: url("./../images/doi_logo.png");
     width: 204px;
 }
 .masthead .container .logo a {
     display: block;
     float: left;
     height: 48px;
-    background: url("../images/doi_logo.png") no-repeat scroll 0 0 / contain  rgba(0, 0, 0, 0);
+    background-image: url("./../images/doi_logo.png") no-repeat scroll 0 0 / contain  rgba(0, 0, 0, 0);
     width: 200px;
 }
 .masthead .container .logo a span {
