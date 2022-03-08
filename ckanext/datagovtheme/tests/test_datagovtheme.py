@@ -3,93 +3,88 @@
 '''Tests for the ckanext.datagovtheme extension.
 
 '''
-from nose.tools import assert_in, assert_true, assert_not_in, assert_false
+import re
+from builtins import object
 
-try:
-    from ckan.tests.helpers import FunctionalTestBase
-except ImportError:
-    from ckan.new_tests.helpers import FunctionalTestBase
-    
-from ckan import plugins as p
-import ckanext
+import pytest
+import six
 
 
-class TestDatagovthemeServed(FunctionalTestBase):
+# The /dataset page uses get_pkg_dict_extra which depends on HarvestObject,
+# hence the harvest extension. Include it for these tests.
+@pytest.mark.ckan_config('ckan.plugins', 'harvest datagovtheme')
+@pytest.mark.use_fixtures('with_plugins', 'clean_db')
+class TestDatagovthemeServed(object):
     '''Tests for the ckanext.datagovtheme.plugin module.'''
 
-    @classmethod
-    def setup_class(cls):
-        super(TestDatagovthemeServed, cls).setup_class()
+    def test_homepage_redirect(self, app):
+        index_response = app.get('/')
 
-        if not p.plugin_loaded('geodatagov'):
-            p.load('geodatagov')
-
-        if not p.plugin_loaded('datagovtheme'):
-            p.load('datagovtheme')
-
-    @classmethod
-    def teardown_class(cls):
-        super(TestDatagovthemeServed, cls).teardown_class()
-        p.unload('geodatagov')
-        p.unload('datagovtheme')
-
-    def test_plugin_loaded(self):
-        assert_true(p.plugin_loaded('datagovtheme'))
-        assert_true(p.plugin_loaded('geodatagov'))
-
-    def test_datagovtheme_css_file(self):
-        app = self._get_test_app()
-
-        index_response = app.get('/dataset')
-        
-        if ckanext.datagovtheme.helpers.is_bootstrap2():
-            assert_in('datagovtheme_bootstrap2.css', index_response.unicode_body)
-            assert_not_in('datagovtheme.css', index_response.unicode_body) 
+        assert 'Welcome to Geospatial Data' not in index_response.body
+        if six.PY2:
+            assert ('You should be redirected automatically to target URL: <a href='
+                    '"/dataset">/dataset</a>') in index_response.body
         else:
-            assert_in('datagovtheme.css', index_response.unicode_body)
-            assert_not_in('datagovtheme_bootstrap2.css', index_response.unicode_body)
-    
-    def test_datagovtheme_html_loads(self):
-        app = self._get_test_app()
+            assert 'datasets found' in index_response.body
 
-        index_response = app.get('/dataset')
-    
-        assert_in("Search Data.Gov", index_response.unicode_body)
-        assert_in("Search datasets...", index_response.unicode_body)
-        assert_in("No datasets found", index_response.unicode_body)
-
-    def test_datagovtheme_navigation(self):
-        app = self._get_test_app()
-
+    def test_datagovtheme_css_file(self, app):
+        """Assert the correct version of CSS is served."""
         index_response = app.get('/dataset')
 
-        assert_in('<li class="active"><a href="/dataset">Data</a></li>', index_response.unicode_body)
-        assert_in('<a class="dropdown-toggle" data-toggle="dropdown">Topics<b\n            class="caret"></b></a>', index_response.unicode_body)
-        assert_in('<li><a href="//resources.data.gov">Resources</a></li>', index_response.unicode_body)
-        assert_in('<li><a href="//strategy.data.gov">Strategy</a></li>', index_response.unicode_body)
-        assert_in('<li><a href="//www.data.gov/developers/">Developers</a></li>', index_response.unicode_body)
-        assert_in('<li><a href="//www.data.gov/contact">Contact</a></li>', index_response.unicode_body)
+        # Note: in development/debug mode, this asset uses the output filename
+        # in webassets.yml. In production mode, it is compiled to a different
+        # name and may have addtional filters (e.g. minification) applied.
+        assert 'datagovtheme.css' in index_response.body
 
-    def test_datagovtheme_topics(self):
-        app = self._get_test_app()
-
+    def test_datagovtheme_html_loads(self, app):
         index_response = app.get('/dataset')
 
-        assert_in('<li class="menu-agriculture">', index_response.unicode_body)
-        assert_in('<li class="menu-climate">', index_response.unicode_body)
-        assert_in('<li class="menu-energy">', index_response.unicode_body)
-        assert_in('<li class="menu-local-government">', index_response.unicode_body)
-        assert_in('<li class="menu-maritime">', index_response.unicode_body)
-        assert_in('<li class="menu-ocean">', index_response.unicode_body)
-        assert_in('<li class="menu-older-adults-health">', index_response.unicode_body)
-        
-    def test_datagovtheme_organizations(self):
-        app = self._get_test_app()
+        # assert "Search Data.Gov" in index_response.body
+        assert "Search datasets..." in index_response.body
+        assert "datasets found" in index_response.body
 
+    def test_datagovtheme_navigation(self, app):
+        index_response = app.get('/dataset')
+
+        aboutElement = """
+        <li style="display:inline;"><a style="display:inline;" href="//data.doi.gov/about">About</a></li>
+        """.strip().replace('\n', '')
+        openGov = """
+            <li style="display:inline;"><a style="display:inline;" href="//www.data.gov/open-gov/">Open Government</a></li>
+        """.strip().replace('\n', '')
+        dataPolicy = """
+            <li style="display:inline;"><a style="display:inline;" href="//www.data.gov/data-policy">Data Policy</a></li>
+        """.strip().replace('\n', '')
+
+        assert '<li style="display:inline;"><a style="display:inline;" href="//www.doi.gov/data">Open Data at DOI</a></li>' \
+            in index_response.body
+        assert '<li style="display:inline;"><a style="display:inline;" href="//usinterior.ideascale.com">Feedback</a></li>' \
+               in index_response.body
+        assert aboutElement in index_response.body
+        assert openGov in index_response.body
+        assert '<li style="display:inline;"><a style="display:inline;" href="//data.gov">data.gov</a></li>' \
+            in index_response.body
+        assert dataPolicy in index_response.body
+
+    """
+    DOI Has no topics drop down menu. This test is not necessary.
+    """
+    # def test_datagovtheme_topics(self, app):
+    #     index_response = app.get('/dataset')
+
+    #     assert '<li class="menu-agriculture">' in index_response.body
+    #     assert '<li class="menu-climate">' in index_response.body
+    #     assert '<li class="menu-energy">' in index_response.body
+    #     assert '<li class="menu-local-government">' in index_response.body
+    #     assert '<li class="menu-maritime">' in index_response.body
+    #     assert '<li class="menu-ocean">' in index_response.body
+    #     assert '<li class="menu-older-adults-health">' in index_response.body
+
+    def test_datagovtheme_organizations(self, app):
         index_response = app.get('/organization')
 
-        assert_in("No organizations found", index_response.unicode_body)
-        assert_in("Search organizations...", index_response.unicode_body)
-        assert_in("What are organizations?", index_response.unicode_body)
-
-
+        org_match = r'organizations? found'
+        matches = re.findall(org_match, index_response.body)
+        assert len(matches) > 0
+        assert "Search organizations..." in index_response.body
+        assert "What are organizations?" in index_response.body

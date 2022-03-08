@@ -1,25 +1,266 @@
-import json
-import urllib, urllib2, json, re, HTMLParser, urlparse
-import os, time
-import logging
+from __future__ import division
+
+from future import standard_library
+
+standard_library.install_aliases()
+
 import copy
 import csv
-import StringIO
-import six
+import json
+import logging
+import os
+import re
+import sys
+import urllib.parse
+import urllib.request
+from builtins import str
 
+import pkg_resources
+import six
+from ckan import model
 from ckan import plugins as p
 from ckan.lib import helpers as h
-from ckan import model
+from ckan.plugins.toolkit import asbool, config, request
 from ckanext.harvest.model import HarvestObject
-from ckanext.geodatagov.plugins import RESOURCE_MAPPING
-
-if p.toolkit.check_ckan_version(max_version='2.3'):
-  from pylons import config
-else:
-  from ckan.plugins.toolkit import config, request
 
 log = logging.getLogger(__name__)
-ckan_tmp_path = '/var/tmp/ckan'
+
+# TODO figure out where this belongs
+# This is used in multiple extensions, including ckanext-geodatagov. It seems
+# like it's just data and could be exposed differently. We could also provide a
+# fallback, so if ckanext-geodatagov is available, use the data from that,
+# otherwise fallback to an alternative.
+RESOURCE_MAPPING = {
+    # ArcGIS File Types
+    'esri rest': ('Esri REST', 'Esri REST API Endpoint'),
+    'arcgis_rest': ('Esri REST', 'Esri REST API Endpoint'),
+    'web map application': ('ArcGIS Online Map', 'ArcGIS Online Map'),
+    'arcgis map preview': ('ArcGIS Map Preview', 'ArcGIS Map Preview'),
+    'arcgis map service': ('ArcGIS Map Service', 'ArcGIS Map Service'),
+    'wms': ('WMS', 'ArcGIS Web Mapping Service'),
+    'wfs': ('WFS', 'ArcGIS Web Feature Service'),
+    'wcs': ('WCS', 'Web Coverage Service'),
+
+    # CSS File Types
+    'css': ('CSS', 'Cascading Style Sheet File'),
+    'text/css': ('CSS', 'Cascading Style Sheet File'),
+
+    # CSV File Types
+    'csv': ('CSV', 'Comma Separated Values File'),
+    'text/csv': ('CSV', 'Comma Separated Values File'),
+
+    # EXE File Types
+    'exe': ('EXE', 'Windows Executable Program'),
+    'application/x-msdos-program': ('EXE', 'Windows Executable Program'),
+
+    # HyperText Markup Language (HTML) File Types
+    'htx': ('HTML', 'Web Page'),
+    'htm': ('HTML', 'Web Page'),
+    'html': ('HTML', 'Web Page'),
+    'htmls': ('HTML', 'Web Page'),
+    'xhtml': ('HTML', 'Web Page'),
+    'text/html': ('HTML', 'Web Page'),
+    'application/xhtml+xml': ('HTML', 'Web Page'),
+    'application/x-httpd-php': ('HTML', 'Web Page'),
+
+    # Image File Types - BITMAP
+    'bm': ('BMP', 'Bitmap Image File'),
+    'bmp': ('BMP', 'Bitmap Image File'),
+    'pbm': ('BMP', 'Bitmap Image File'),
+    'xbm': ('BMP', 'Bitmap Image File'),
+    'image/bmp': ('BMP', 'Bitmap Image File'),
+    'image/x-ms-bmp': ('BMP', 'Bitmap Image File'),
+    'image/x-xbitmap': ('BMP', 'Bitmap Image File'),
+    'image/x-windows-bmp': ('BMP', 'Bitmap Image File'),
+    'image/x-portable-bitmap': ('BMP', 'Bitmap Image File'),
+
+    # Image File Types - Graphics Interchange Format (GIF)
+    'gif': ('GIF', 'GIF Image File'),
+    'image/gif': ('GIF', 'GIF Image File'),
+
+    # Image File Types - ICON
+    'ico': ('ICO', 'Icon Image File'),
+    'image/x-icon': ('ICO', 'Icon Image File'),
+
+    # Image File Types - JPEG
+    'jpe': ('JPEG', 'JPEG Image File'),
+    'jpg': ('JPEG', 'JPEG Image File'),
+    'jps': ('JPEG', 'JPEG Image File'),
+    'jpeg': ('JPEG', 'JPEG Image File'),
+    'pjpeg': ('JPEG', 'JPEG Image File'),
+    'image/jpeg': ('JPEG', 'JPEG Image File'),
+    'image/pjpeg': ('JPEG', 'JPEG Image File'),
+    'image/x-jps': ('JPEG', 'JPEG Image File'),
+    'image/x-citrix-jpeg': ('JPEG', 'JPEG Image File'),
+
+    # Image File Types - PNG
+    'png': ('PNG', 'PNG Image File'),
+    'x-png': ('PNG', 'PNG Image File'),
+    'image/png': ('PNG', 'PNG Image File'),
+    'image/x-citrix-png': ('PNG', 'PNG Image File'),
+
+    # Image File Types - Scalable Vector Graphics (SVG)
+    'svg': ('SVG', 'SVG Image File'),
+    'image/svg+xml': ('SVG', 'SVG Image File'),
+
+    # Image File Types - Tagged Image File Format (TIFF)
+    'tif': ('TIFF', 'TIFF Image File'),
+    'tiff': ('TIFF', 'TIFF Image File'),
+    'image/tiff': ('TIFF', 'TIFF Image File'),
+    'image/x-tiff': ('TIFF', 'TIFF Image File'),
+
+    # JSON File Types
+    'json': ('JSON', 'JSON File'),
+    'text/x-json': ('JSON', 'JSON File'),
+    'application/json': ('JSON', 'JSON File'),
+
+    # KML File Types
+    'kml': ('KML', 'KML File'),
+    'kmz': ('KML', 'KMZ File'),
+    'application/vnd.google-earth.kml+xml': ('KML', 'KML File'),
+    'application/vnd.google-earth.kmz': ('KML', 'KMZ File'),
+
+    # MS Access File Types
+    'mdb': ('ACCESS', 'MS Access Database'),
+    'access': ('ACCESS', 'MS Access Database'),
+    'application/mdb': ('ACCESS', 'MS Access Database'),
+    'application/msaccess': ('ACCESS', 'MS Access Database'),
+    'application/x-msaccess': ('ACCESS', 'MS Access Database'),
+    'application/vnd.msaccess': ('ACCESS', 'MS Access Database'),
+    'application/vnd.ms-access': ('ACCESS', 'MS Access Database'),
+
+    # MS Excel File Types
+    'xl': ('EXCEL', 'MS Excel File'),
+    'xla': ('EXCEL', 'MS Excel File'),
+    'xlb': ('EXCEL', 'MS Excel File'),
+    'xlc': ('EXCEL', 'MS Excel File'),
+    'xld': ('EXCEL', 'MS Excel File'),
+    'xls': ('EXCEL', 'MS Excel File'),
+    'xlsx': ('EXCEL', 'MS Excel File'),
+    'xlsm': ('EXCEL', 'MS Excel File'),
+    'excel': ('EXCEL', 'MS Excel File'),
+    'openXML': ('EXCEL', 'MS Excel File'),
+    'application/excel': ('EXCEL', 'MS Excel File'),
+    'application/x-excel': ('EXCEL', 'MS Excel File'),
+    'application/x-msexcel': ('EXCEL', 'MS Excel File'),
+    'application/vnd.ms-excel': ('EXCEL', 'MS Excel File'),
+    'application/vnd.ms-excel.sheet.macroEnabled.12': ('EXCEL', 'MS Excel File'),
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ('EXCEL', 'MS Excel File'),
+
+    # MS PowerPoint File Types
+    'ppt': ('POWERPOINT', 'MS PowerPoint File'),
+    'pps': ('POWERPOINT', 'MS PowerPoint File'),
+    'pptx': ('POWERPOINT', 'MS PowerPoint File'),
+    'ppsx': ('POWERPOINT', 'MS PowerPoint File'),
+    'pptm': ('POWERPOINT', 'MS PowerPoint File'),
+    'ppsm': ('POWERPOINT', 'MS PowerPoint File'),
+    'sldx': ('POWERPOINT', 'MS PowerPoint File'),
+    'sldm': ('POWERPOINT', 'MS PowerPoint File'),
+    'application/powerpoint': ('POWERPOINT', 'MS PowerPoint File'),
+    'application/mspowerpoint': ('POWERPOINT', 'MS PowerPoint File'),
+    'application/x-mspowerpoint': ('POWERPOINT', 'MS PowerPoint File'),
+    'application/vnd.ms-powerpoint': ('POWERPOINT', 'MS PowerPoint File'),
+    'application/vnd.ms-powerpoint.presentation.macroEnabled.12': ('POWERPOINT', 'MS PowerPoint File'),
+    'application/vnd.ms-powerpoint.slideshow.macroEnabled.12': ('POWERPOINT', 'MS PowerPoint File'),
+    'application/vnd.ms-powerpoint.slide.macroEnabled.12': ('POWERPOINT', 'MS PowerPoint File'),
+    'application/vnd.openxmlformats-officedocument.presentationml.slide': ('POWERPOINT', 'MS PowerPoint File'),
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': ('POWERPOINT', 'MS PowerPoint File'),
+    'application/vnd.openxmlformats-officedocument.presentationml.slideshow': ('POWERPOINT', 'MS PowerPoint File'),
+
+    # MS Word File Types
+    'doc': ('DOC', 'MS Word File'),
+    'docx': ('DOC', 'MS Word File'),
+    'docm': ('DOC', 'MS Word File'),
+    'word': ('DOC', 'MS Word File'),
+    'application/msword': ('DOC', 'MS Word File'),
+    'application/vnd.ms-word.document.macroEnabled.12': ('DOC', 'MS Word File'),
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ('DOC', 'MS Word File'),
+
+    # Network Common Data Form (NetCDF) File Types
+    'nc': ('CDF', 'NetCDF File'),
+    'cdf': ('CDF', 'NetCDF File'),
+    'netcdf': ('CDF', 'NetCDF File'),
+    'application/x-netcdf': ('NETCDF', 'NetCDF File'),
+
+    # PDF File Types
+    'pdf': ('PDF', 'PDF File'),
+    'application/pdf': ('PDF', 'PDF File'),
+
+    # PERL File Types
+    'pl': ('PERL', 'Perl Script File'),
+    'pm': ('PERL', 'Perl Module File'),
+    'perl': ('PERL', 'Perl Script File'),
+    'text/x-perl': ('PERL', 'Perl Script File'),
+
+    # QGIS File Types
+    'qgis': ('QGIS', 'QGIS File'),
+    'application/x-qgis': ('QGIS', 'QGIS File'),
+
+    # RAR File Types
+    'rar': ('RAR', 'RAR Compressed File'),
+    'application/rar': ('RAR', 'RAR Compressed File'),
+    'application/vnd.rar': ('RAR', 'RAR Compressed File'),
+    'application/x-rar-compressed': ('RAR', 'RAR Compressed File'),
+
+    # Resource Description Framework (RDF) File Types
+    'rdf': ('RDF', 'RDF File'),
+    'application/rdf+xml': ('RDF', 'RDF File'),
+
+    # Rich Text Format (RTF) File Types
+    'rt': ('RICH TEXT', 'Rich Text File'),
+    'rtf': ('RICH TEXT', 'Rich Text File'),
+    'rtx': ('RICH TEXT', 'Rich Text File'),
+    'text/richtext': ('RICH TEXT', 'Rich Text File'),
+    'text/vnd.rn-realtext': ('RICH TEXT', 'Rich Text File'),
+    'application/rtf': ('RICH TEXT', 'Rich Text File'),
+    'application/x-rtf': ('RICH TEXT', 'Rich Text File'),
+
+    # SID File Types - Primary association: Commodore64 (C64)?
+    'sid': ('SID', 'SID File'),
+    'mrsid': ('SID', 'SID File'),
+    'audio/psid': ('SID', 'SID File'),
+    'audio/x-psid': ('SID', 'SID File'),
+    'audio/sidtune': ('SID', 'MID File'),
+    'audio/x-sidtune': ('SID', 'SID File'),
+    'audio/prs.sid': ('SID', 'SID File'),
+
+    # Tab Separated Values (TSV) File Types
+    'tsv': ('TSV', 'Tab Separated Values File'),
+    'text/tab-separated-values': ('TSV', 'Tab Separated Values File'),
+
+    # Tape Archive (TAR) File Types
+    'tar': ('TAR', 'TAR Compressed File'),
+    'application/x-tar': ('TAR', 'TAR Compressed File'),
+
+    # Text File Types
+    'txt': ('TEXT', 'Text File'),
+    'text/plain': ('TEXT', 'Text File'),
+
+    # Extensible Markup Language (XML) File Types
+    'xml': ('XML', 'XML File'),
+    'text/xml': ('XML', 'XML File'),
+    'application/xml': ('XML', 'XML File'),
+
+    # XYZ File Format File Types
+    'xyz': ('XYZ', 'XYZ File'),
+    'chemical/x-xyz': ('XYZ', 'XYZ File'),
+
+    # ZIP File Types
+    'zip': ('ZIP', 'Zip File'),
+    'application/zip': ('ZIP', 'Zip File'),
+    'multipart/x-zip': ('ZIP', 'Zip File'),
+    'application/x-compressed': ('ZIP', 'Zip File'),
+    'application/x-zip-compressed': ('ZIP', 'Zip File'),
+}
+
+
+def api_doc_url():
+    lang = h.lang()
+    ckan_major_minor_version = '.'.join(h.ckan_version().split('.')[0:2])
+
+    return 'https://docs.ckan.org/{lang}/{version}/api/index.html'.format(
+           lang=lang, version=ckan_major_minor_version)
+
 
 def render_datetime_datagov(date_str):
     try:
@@ -27,6 +268,7 @@ def render_datetime_datagov(date_str):
     except (ValueError, TypeError):
         return date_str
     return value
+
 
 def get_harvest_object_formats(harvest_object_id):
     try:
@@ -36,7 +278,7 @@ def get_harvest_object_formats(harvest_object_id):
         return {}
 
     def get_extra(obj, key, default=None):
-        for k, v in obj['extras'].iteritems():
+        for k, v in obj['extras'].items():
             if k == key:
                 return v
         return default
@@ -67,80 +309,34 @@ def get_harvest_object_formats(harvest_object_id):
     format_name = get_extra(obj, 'format', 'iso')
     original_format_name = get_extra(obj, 'original_format')
 
-    #check if harvest_object holds a ckan_url key
+    # check if harvest_object holds a ckan_url key
     try:
         json.loads(obj['content'])['ckan_url']
         format_name = 'ckan'
-    except:
+    except Exception:
         pass
- 
+
     return {
-            'object_format': format_title(format_name),
-            'object_format_type': format_type(format_name),
-            'original_format': format_title(original_format_name),
-            'original_format_type': format_type(original_format_name),
-           }
+        'object_format': format_title(format_name),
+        'object_format_type': format_type(format_name),
+        'original_format': format_title(original_format_name),
+        'original_format_type': format_type(original_format_name),
+    }
 
+
+# TODO can we simply this function more? There's a lot of json processing
+# happening (and a lack of test coverage).
 def get_dynamic_menu():
-    # production does return [] here
-    filepath = ckan_tmp_path + '/dynamic_menu/'
-    filename = filepath + 'menu.json'
-    url = config.get('ckanext.geodatagov.dynamic_menu.url', 'https://www.data.gov/app/plugins/datagov-custom/wp_download_links.php')
-
-    time_file = 0
-    time_current = time.time()
+    menus = {}
     try:
-        time_file = os.path.getmtime(filename)
-    except OSError:
-        if not os.path.exists(filepath):
-            os.makedirs(filepath)
+        # TODO in python 3, replace pkg_resources with [importlib-resources](https://pypi.org/project/importlib-resources/)
+        content = pkg_resources.resource_string('ckanext.datagovtheme.data.dynamic_menu', 'menu.json')
+        menus = json.loads(content)
+    except Exception:
+        log.exception('Could not open %s', 'ckanext.datagovtheme.data.dynamic_menu:menu.json')
+        return menus
 
-    # check to see if file is older than .5 hour
-    if (time_current - time_file) < 3600/2:
-        file_obj = open(filename)
-        file_conent = file_obj.read()
-    else:
-        # it means file is old, or does not exist
-        # fetch new content
-        if os.path.exists(filename):
-            sec_timeout = 5
-        else:
-            sec_timeout = 20 # longer urlopen timeout if there is no backup file.
-
-        try:
-            resource = urllib2.urlopen(url, timeout=sec_timeout)
-        except:
-            file_obj = open(filename)
-            file_conent = file_obj.read()
-            # touch the file, so that it wont keep re-trying and slow down page loading
-            os.utime(filename, None)
-        else:
-            file_obj = open(filename, 'w+')
-            file_conent = resource.read()
-            file_obj.write(file_conent)
-
-    file_obj.close()
-    # remove jsonp wrapper "jsonCallback(JSON);"
-    re_obj = re.compile(r"^jsonCallback\((.*)\);$", re.DOTALL)
-    json_menu = re_obj.sub(r"\1", file_conent)
-    # unescape &amp; or alike
-    html_parser =  HTMLParser.HTMLParser()
-    json_menu_clean = None
-    try:
-        json_menu_clean = html_parser.unescape(json_menu)
-    except:
-        pass
-
-    menus = ''
-    if json_menu_clean:
-        try:
-            menus = json.loads(json_menu_clean)
-        except:
-            pass
-    if p.toolkit.check_ckan_version(max_version='2.3'):
-        query = p.toolkit.c.environ.get('QUERY_STRING', '')
-    else:
-        query = request.environ.get('QUERY_STRING', '')
+    query = request.environ.get('QUERY_STRING', '')
     submenu_key = None
     category_1 = None
     category_2 = None
@@ -148,16 +344,16 @@ def get_dynamic_menu():
     climate_generic_category = None
 
     if menus and query:
-        query_dict = urlparse.parse_qs(query)
+        query_dict = urllib.parse.parse_qs(query)
         organization_types = query_dict.get('organization_type', [])
         organizations = query_dict.get('organization', [])
         groups = query_dict.get('groups', [])
         if (not groups or groups == ['local']) and organization_types in [
-                    ['State Government'],
-                    ['City Government'],
-                    ['County Government'],
-                    ['Local Government'],
-                ]:
+            ['State Government'],
+            ['City Government'],
+            ['County Government'],
+            ['Local Government'],
+        ]:
             # State/County/Cities and Local are merged into 'local' group.
             organization_types = []
             groups = ['local']
@@ -174,7 +370,13 @@ def get_dynamic_menu():
                     categories = query_dict.get('vocab_category_all', [])
                     # some special topic categories got their own sub menus.
                     if submenu_key == 'climate' and categories:
-                        cat_food_list = ['Food Resilience', 'Food Production', 'Food Distribution', 'Food Safety and Nutrition', 'Food Security']
+                        cat_food_list = [
+                            'Food Resilience',
+                            'Food Production',
+                            'Food Distribution',
+                            'Food Safety and Nutrition',
+                            'Food Security'
+                        ]
                         cat_coastal_list = ['Coastal Flooding']
                         if set(cat_food_list).issuperset(categories):
                             category = 'foodresilience'
@@ -208,7 +410,6 @@ def get_dynamic_menu():
         else:
             navigations = menus.get(submenu_key + '_navigation')
 
-
         if navigations:
             submenus = []
             for submenu in navigations:
@@ -218,12 +419,12 @@ def get_dynamic_menu():
             menus['submenus'] = submenus
 
             name_pair = {
-            'jobs-and-skills': 'Jobs & Skills',
-            'development': 'Global Development',
-            'research': 'Science & Research',
-            'food': 'Agriculture',
-            'coastalflooding': ['Climate', 'Coastal Flooding'],
-            'foodresilience': ['Climate', 'Food Resilience'],
+                'jobs-and-skills': 'Jobs & Skills',
+                'development': 'Global Development',
+                'research': 'Science & Research',
+                'food': 'Agriculture',
+                'coastalflooding': ['Climate', 'Coastal Flooding'],
+                'foodresilience': ['Climate', 'Food Resilience'],
             }
             if climate_generic_category:
                 if category_1:
@@ -234,7 +435,7 @@ def get_dynamic_menu():
             parent = {}
             name = name_pair.get(submenu_key, submenu_key.capitalize())
             if type(name) is list:
-                parent['key'] = name[0].lower() # hope nothing breaks here
+                parent['key'] = name[0].lower()  # hope nothing breaks here
                 parent['url'] = '//www.data.gov/' + parent['key']
                 parent['class'] = 'topic-' + parent['key']
 
@@ -247,27 +448,89 @@ def get_dynamic_menu():
 
     return menus
 
+
 def get_harvest_source_link(package_dict):
     harvest_source_id = get_pkg_dict_extra(package_dict, 'harvest_source_id', None)
     harvest_source_title = get_pkg_dict_extra(package_dict, 'harvest_source_title', None)
 
     if harvest_source_id and harvest_source_title:
-       msg = p.toolkit._('Harvested from')
-       url = h.url_for('harvest_read', id=harvest_source_id)
-       link = '{msg} <a href="{url}">{title}</a>'.format(url=url, msg=msg, title=harvest_source_title)
-       return p.toolkit.literal(link)
+        msg = p.toolkit._('Harvested from')
+        url = h.url_for('harvest_read', id=harvest_source_id)
+        link = '{msg} <a href="{url}">{title}</a>'.format(url=url, msg=msg, title=harvest_source_title)
+        return p.toolkit.literal(link)
 
     return ''
 
+
+# https://github.com/ckan/ckanext-spatial/blob/011008b9c5c4bf58ddd401c805328a9928bbe4ea/ckanext/spatial/helpers.py
+def get_reference_date(date_str):
+    '''
+        Gets a reference date extra created by the harvesters and formats it
+        nicely for the UI.
+        Examples:
+            [{"type": "creation", "value": "1977"}, {"type": "revision", "value": "1981-05-15"}]
+            [{"type": "publication", "value": "1977"}]
+            [{"type": "publication", "value": "NaN-NaN-NaN"}]
+        Results
+            1977 (creation), May 15, 1981 (revision)
+            1977 (publication)
+            NaN-NaN-NaN (publication)
+    '''
+    try:
+        out = []
+        for date in h.json.loads(date_str):
+            value = h.render_datetime(date['value']) or date['value']
+            out.append('{0} ({1})'.format(value, date['type']))
+        return ', '.join(out)
+    except (ValueError, TypeError):
+        return date_str
+
+
+# https://github.com/ckan/ckanext-spatial/blob/011008b9c5c4bf58ddd401c805328a9928bbe4ea/ckanext/spatial/helpers.py#L35
+# This doesn't seem specific to ckanext-spatial. Maybe this should move into ckanext-harvest or ckan proper?
+def get_responsible_party(value):
+    '''
+        Gets a responsible party extra created by the harvesters and formats it
+        nicely for the UI.
+        Examples:
+            [{"name": "Complex Systems Research Center", "roles": ["pointOfContact"]}]
+            [
+                {"name": "British Geological Survey", "roles": ["custodian", "pointOfContact"]},
+                {"name": "Natural England", "roles": ["publisher"]}
+            ]
+        Results
+            Complex Systems Research Center (pointOfContact)
+            British Geological Survey (custodian, pointOfContact); Natural England (publisher)
+    '''
+    formatted = {
+        'resourceProvider': p.toolkit._('Resource Provider'),
+        'pointOfContact': p.toolkit._('Point of Contact'),
+        'principalInvestigator': p.toolkit._('Principal Investigator'),
+    }
+
+    try:
+        out = []
+        parties = h.json.loads(value)
+        for party in parties:
+            roles = [formatted[role] if role in list(formatted.keys()) else p.toolkit._(role.capitalize()) for role in
+                     party['roles']]
+            out.append('{0} ({1})'.format(party['name'], ', '.join(roles)))
+        return '; '.join(out)
+    except (ValueError, TypeError):
+        return value
+
+
 def is_map_viewer_format(resource):
+    # TODO rename config option to ckanext.datagovtheme
     viewer_url = config.get('ckanext.geodatagov.spatial_preview.url')
     viewer_formats = config.get('ckanext.geodatagov.spatial_preview.formats', 'wms kml kmz').strip().split(' ')
 
     return viewer_url and resource.get('url') and resource.get('format', '').lower() in viewer_formats
 
+
 def get_map_viewer_params(resource, advanced=False):
 
-    params= {
+    params = {
         'url': resource['url'],
         'serviceType': resource.get('format'),
     }
@@ -277,35 +540,37 @@ def get_map_viewer_params(resource, advanced=False):
     if advanced:
         params['mode'] == 'advanced'
 
-    return urllib.urlencode(params)
+    return urllib.parse.urlencode(params)
+
 
 def resource_preview_custom(resource, pkg_id):
 
     resource_format = resource.get('format', '').lower()
 
-
     if is_map_viewer_format(resource):
+        # TODO rename config option to ckanext.datagovtheme
         viewer_url = config.get('ckanext.geodatagov.spatial_preview.url')
 
         url = '{viewer_url}?{params}'.format(
-                viewer_url=viewer_url,
-                params=get_map_viewer_params(resource))
+            viewer_url=viewer_url,
+            params=get_map_viewer_params(resource))
 
         return p.toolkit.render_snippet("dataviewer/snippets/data_preview.html",
-               data={'embed': False,
-               'resource_url': url,
-               'raw_resource_url': resource['url']})
+                                        data={'embed': False,
+                                              'resource_url': url,
+                                              'raw_resource_url': resource['url']})
 
     elif resource_format in ('web map application', 'arcgis online map') \
-         and ('webmap=' in resource.get('url') or 'services=' in resource.get('url')):
+            and ('webmap=' in resource.get('url') or 'services=' in resource.get('url')):
         url = resource['url'].replace('viewer.html', 'embedViewer.html')
 
         return p.toolkit.render_snippet("dataviewer/snippets/data_preview.html",
-               data={'embed': False,
-               'resource_url': url,
-               'raw_resource_url': resource['url']})
+                                        data={'embed': False,
+                                              'resource_url': url,
+                                              'raw_resource_url': resource['url']})
 
     return h.resource_preview(resource, pkg_id)
+
 
 types = {
     'web': ('html', 'data', 'esri rest', 'gov', 'org', ''),
@@ -313,16 +578,17 @@ types = {
     # "web map application" is deprecated in favour of "arcgis online map"
     'map': ('wms', 'kml', 'kmz', 'georss', 'web map application', 'arcgis online map'),
     'plotly': ('csv', 'xls', 'excel', 'openxml', 'access', 'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'text/csv','text/tab-separated-values',
-        'application/matlab-mattext/x-matlab', 'application/x-msaccess',
-        'application/msaccess', 'application/x-hdf', 'application/x-bag'),
+               'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+               'text/csv', 'text/tab-separated-values',
+               'application/matlab-mattext/x-matlab', 'application/x-msaccess',
+               'application/msaccess', 'application/x-hdf', 'application/x-bag'),
     'cartodb': ('csv', 'xls', 'excel', 'openxml', 'kml', 'geojson', 'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'text/csv', 'application/vnd.google-earth.kml+xml',
-        'application/vnd.geo+json'),
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'text/csv', 'application/vnd.google-earth.kml+xml',
+                'application/vnd.geo+json'),
     'arcgis': ('esri rest', 'wms', 'kml', 'kmz', 'application/vnd.google-earth.kml+xml', 'georss')
 }
+
 
 def is_type_format(type, resource):
     if resource and type in types:
@@ -335,42 +601,52 @@ def is_type_format(type, resource):
             return True
     return False
 
+
 def is_web_format(resource):
     return is_type_format('web', resource)
+
 
 def is_preview_format(resource):
     return is_type_format('preview', resource)
 
+
 def is_map_format(resource):
     return is_type_format('map', resource)
+
 
 def is_plotly_format(resource):
     return is_type_format('plotly', resource)
 
+
 def is_cartodb_format(resource):
     return is_type_format('cartodb', resource)
+
 
 def is_arcgis_format(resource):
     return is_type_format('arcgis', resource)
 
+
 def arcgis_format_query(resource):
     mimetype = resource.get('mimetype', None)
-    kmlstring = re.compile('(kml|kmz)');
+    kmlstring = re.compile('(kml|kmz)')
     if kmlstring.match(str(mimetype)):
         return 'kml'
     else:
         # wms, georss
         return mimetype
 
+
 def convert_resource_format(format):
-    if format: format = format.lower()
-    formats = RESOURCE_MAPPING.keys()
+    if format:
+        format = format.lower()
+    formats = list(RESOURCE_MAPPING.keys())
     if format in formats:
         format = RESOURCE_MAPPING[format][1]
     else:
         format = 'Web Resource'
 
     return format
+
 
 def remove_extra_chars(str_value):
     # this will remove brackets for list and dict values.
@@ -379,14 +655,14 @@ def remove_extra_chars(str_value):
 
     try:
         new_value = ast.literal_eval(str_value)
-    except:
+    except Exception:
         pass
 
     if type(new_value) is list:
         new_value = [i.strip() for i in new_value]
         ret = ', '.join(new_value)
     elif type(new_value) is dict:
-        ret = ', '.join('{0}:{1}'.format(key, val) for key, val in new_value.items())
+        ret = ', '.join('{0}:{1}'.format(key, val) for key, val in list(new_value.items()))
     else:
         ret = str_value
 
@@ -403,7 +679,7 @@ def schema11_key_mod(key):
         # 'Identifier': 'Unique Identifier',
         'Modified': 'Data Last Modified',
         'Accesslevel': 'Public Access Level',
-        'Bureaucode' : 'Bureau Code',
+        'Bureaucode': 'Bureau Code',
         'Programcode': 'Program Code',
         'Accrualperiodicity': 'Data Update Frequency',
         'Conformsto': 'Data Standard',
@@ -419,6 +695,7 @@ def schema11_key_mod(key):
     }
 
     return key_map.get(key, key)
+
 
 def schema11_frequency_mod(value):
     frequency_map = {
@@ -439,11 +716,11 @@ def schema11_frequency_mod(value):
         'R/PT1S': 'Continuously updated',
         'R/P1M': 'Monthly',
         'R/P3M': 'Quarterly',
-        'R/P0.5M': 'Semimonthly',
         'R/P4M': 'Three times a year',
         'R/P1W': 'Weekly',
     }
     return frequency_map.get(value, value)
+
 
 def convert_top_category_to_list(str_value):
     import ast
@@ -451,7 +728,7 @@ def convert_top_category_to_list(str_value):
 
     try:
         list_value = ast.literal_eval(str_value)
-    except:
+    except Exception:
         pass
 
     if type(list_value) is not list:
@@ -459,91 +736,89 @@ def convert_top_category_to_list(str_value):
 
     return list_value
 
+
 def get_bureau_info(bureau_code):
-    WEB_PATH = '/fanstatic/datagovtheme/images/logos/'
+    """
+    Maps Bureau Codes to a title, logo, and dataset URL.
+
+    bureau_code: bureau code string or a list of bureau code strings.
+
+    returns dict(title, url, code, logo) or None if there was an error or the bureau code does not exist in our list.
+    """
+
+    if not bureau_code:
+        return None
+    if six.PY3:
+        WEB_PATH = '/images/logos/'
+    else:
+        WEB_PATH = '/fanstatic/datagovtheme/images/logos/'
+
     LOCAL_PATH = 'fanstatic_library/images/logos/'
 
     # handle both '007:15', or ['007:15', '007:16']
     if isinstance(bureau_code, list):
-      bureau_code = bureau_code[0]
-
-    filepath = ckan_tmp_path + '/logos/'
-    filename = filepath + 'bureau.csv'
-    url = config.get('ckanext.geodatagov.bureau_csv.url', '')
-    if not url:
-        url = config.get('ckanext.geodatagov.bureau_csv.url_default', '')
-
-    time_file = 0
-    time_current = time.time()
-    try:
-        time_file = os.path.getmtime(filename)
-    except OSError:
-        if not os.path.exists(filepath):
-            os.makedirs(filepath)
-
-    # check to see if file is older than .5 hour
-    if (time_current - time_file) < 3600/2:
-        file_obj = open(filename)
-        file_conent = file_obj.read()
-    else:
-        # it means file is old, or does not exist
-        # fetch new content
-        if os.path.exists(filename):
-            sec_timeout = 5
-        else:
-            sec_timeout = 20 # longer urlopen timeout if there is no backup file.
-
-        try:
-            resource = urllib2.urlopen(url, timeout=sec_timeout)
-        except:
-            file_obj = open(filename)
-            file_conent = file_obj.read()
-            # touch the file, so that it wont keep re-trying and slow down page loading
-            os.utime(filename, None)
-        else:
-            file_obj = open(filename, 'w+')
-            file_conent = resource.read()
-            file_obj.write(file_conent)
-
-    file_obj.close()
-
-    bureau_info = {
-        'code': bureau_code
-    }
+        bureau_code = bureau_code[0]
 
     try:
-        agency, bureau = bureau_code.split(':')
+        agency_part, bureau_part = bureau_code.split(':')
     except ValueError:
+        log.warning('bureau code is invalid code=%s' % bureau_code)
         return None
 
-    # Whole section is set to return None
-    for row in csv.reader(StringIO.StringIO(file_conent)):
-        if agency == row[2].zfill(3) \
-                and bureau == row[3].zfill(2):
-            bureau_info['title'] = row[1]
-            bureau_info['url'] = '/dataset?q=bureauCode:"' + bureau_code + '"'
+    controller = 'dataset'
+    if not p.toolkit.check_ckan_version(min_version='2.9'):
+        # TODO remove this after CKAN 2.8 support is dropped
+        controller = 'package'
+
+    # TODO in python 3, replace pkg_resources with [importlib-resources](https://pypi.org/project/importlib-resources/)
+    bureau_filename = pkg_resources.resource_filename('ckanext.datagovtheme.data', 'omb_bureau_codes.csv')
+    if sys.version_info >= (3, 0):
+        # Python 3 csv.reader wants text data
+        bureau_file = open(bureau_filename, 'r', newline='', encoding='utf8')
+    else:
+        # Python 2 csv.reader wants binary data
+        bureau_file = open(bureau_filename, 'rb')
+
+    # Should this be cached in memory as an index to speed things up?
+    bureau_table = csv.reader(bureau_file)
+    for row in bureau_table:
+        # We're doing the zfill to pad for 000 every lookup, more reason to
+        # cache this or do a transform when the file is imported into the
+        # repository.
+        if agency_part == row[2].zfill(3) and bureau_part == row[3].zfill(2):
+            bureau_title = row[1]
+            bureau_url = h.url_for(controller=controller, action='search', q='bureauCode:"%s"' % bureau_code)
             break
     else:
+        log.warning('omb_bureau_codes.csv is empty')
         return None
+
+    # TODO in python 3, use a context manager since we won't need the conditional `open`
+    bureau_file.close()
 
     # check logo image file exists or not
+    # should this be cached as in index to speed this up?
+    bureau_logo = None
     for ext in ['png', 'gif', 'jpg']:
-        logo = agency + '-' + bureau + '.' + ext
-        if os.path.isfile(os.path.join(os.path.dirname(__file__), LOCAL_PATH) + logo):
-            bureau_info['logo'] = WEB_PATH + logo
+        logo_filename = '%s-%s.%s' % (agency_part, bureau_part, ext)
+        # We should probably be using pre_resources here, too, but we also need
+        # to add the logos as assets. That seems to be magically working right
+        # now?
+        if os.path.isfile(os.path.join(os.path.dirname(__file__), LOCAL_PATH) + logo_filename):
+            bureau_logo = h.url_for_static(WEB_PATH + logo_filename)
             break
-    else:
-        bureau_info['logo'] = None
 
-    return bureau_info
+    return {
+        'title': bureau_title,
+        'code': bureau_code,
+        'logo': bureau_logo,
+        'url': bureau_url,
+    }
 
 
-def is_bootstrap2():
-    return not p.toolkit.check_ckan_version(min_version='2.8')
-
-
+# TODO can we drop this dependency on ckanext-harvest? Can this be moved to ckanext-harvest? geodatagov?
 def get_pkg_dict_extra(pkg_dict, key, default=None):
-    ''' Ovberride the CKAN core helper to add rolled up extras
+    '''Override the CKAN core helper to add rolled up extras
     Returns the value for the dataset extra with the provided key.
 
     If the key is not found, it returns a default value, which is None by
@@ -554,25 +829,25 @@ def get_pkg_dict_extra(pkg_dict, key, default=None):
     :default: default value returned if not found
     '''
     extras = pkg_dict['extras'] if 'extras' in pkg_dict else []
-    
+
     for extra in extras:
         if extra['key'] == key:
             return extra['value']
 
-    ## also include the rolled up extras
+    # also include the rolled up extras
     for extra in extras:
         if 'extras_rollup' == extra.get('key'):
             rolledup_extras = json.loads(extra.get('value'))
-            for k, value in rolledup_extras.iteritems():
-                if k == key: 
+            for k, value in rolledup_extras.items():
+                if k == key:
                     return value
-    
+
     # Also include harvest information if exists
     if key in ['harvest_object_id', 'harvest_source_id', 'harvest_source_title']:
 
         harvest_object = model.Session.query(HarvestObject) \
                 .filter(HarvestObject.package_id == pkg_dict['id']) \
-                .filter(HarvestObject.current==True).first() # noqa
+                .filter(HarvestObject.current == True).first()  # noqa
 
         if harvest_object:
             if key == 'harvest_object_id':
@@ -585,6 +860,8 @@ def get_pkg_dict_extra(pkg_dict, key, default=None):
     return default
 
 # from GSA/ckanext-archiver
+
+
 def archiver_resource_info_table(resource):
     archival = resource.get('archiver')
     if not archival:
@@ -592,9 +869,9 @@ def archiver_resource_info_table(resource):
     extra_vars = {'resource': resource}
     extra_vars.update(archival)
     res = p.toolkit.literal(
-            p.toolkit.render('archiver/resource_info_table.html',
-            extra_vars=extra_vars)
-            )
+        p.toolkit.render('archiver/resource_info_table.html',
+                         extra_vars=extra_vars)
+    )
     return res
 
 
@@ -605,11 +882,13 @@ def archiver_is_resource_broken_line(resource):
     extra_vars = {'resource': resource}
     extra_vars.update(archival)
     res = p.toolkit.literal(
-            p.toolkit.render('archiver/is_resource_broken_line.html',
-            extra_vars=extra_vars))
+        p.toolkit.render('archiver/is_resource_broken_line.html',
+                         extra_vars=extra_vars))
     return res
 
 # from GSA/ckanext-qa
+
+
 def qa_openness_stars_resource_line(resource):
     qa = resource.get('qa')
     if not qa:
@@ -619,7 +898,7 @@ def qa_openness_stars_resource_line(resource):
     extra_vars = copy.deepcopy(qa)
     return p.toolkit.literal(
         p.toolkit.render('qa/openness_stars_line.html',
-                  extra_vars=extra_vars))
+                         extra_vars=extra_vars))
 
 
 def qa_openness_stars_resource_table(resource):
@@ -631,4 +910,15 @@ def qa_openness_stars_resource_table(resource):
     extra_vars = copy.deepcopy(qa)
     return p.toolkit.literal(
         p.toolkit.render('qa/openness_stars_table.html',
-                  extra_vars=extra_vars))
+                         extra_vars=extra_vars))
+
+
+def get_login_url():
+    # TODO maybe make this a configuration option for ckanext.saml2auth instead of the implicit dependency
+    # TODO push this upstream to ckanext.saml2auth, we should be able to use url_for
+    # TODO if we have to rely on a config option, it should be in the ckanext.datagovtheme namespace
+    enable_ckan_internal_login = asbool(config.get('ckanext.saml2auth.enable_ckan_internal_login', 'true'))
+    if enable_ckan_internal_login:
+        return h.url_for(controller='user', action='login')
+
+    return '/user/saml2login'
